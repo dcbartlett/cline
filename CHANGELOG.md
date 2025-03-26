@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.9.0
+
+### Minor Changes
+
+-   ec5bfc8: Add Bedrock prompt caching support (optional).
+
+    This feature protected under checkbox because it is not yet rolled out to everyone, and if you will try to send cache headers, and its not enabled for you, you will get error.
+
 ## [3.8.3]
 
 -   Add support for SambaNova QwQ-32B model
