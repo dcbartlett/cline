@@ -1,110 +1,44 @@
-name: Changeset Release
-run-name: Changeset Release ${{ github.actor != 'github-actions' && '- Create PR' || '- Update Changelog' }}
+name: Changeset - Process Version Bump PR
+run-name: Changeset - Process Version Bump PR for #${{ github.event.pull_request.number }}
 
 on:
-    workflow_dispatch:
     pull_request:
-        types: [opened, closed]
+        types: [opened, labeled] # Trigger when a PR is opened or labeled
 
 env:
-    REPO_PATH: ${{ github.repository }}
-    GIT_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || 'main' }}
     NODE_VERSION: 20.18.1
 
 jobs:
-    # Job 0: Collect metadata from PR
-    changeset-pr-metadata:
-        if: github.event_name == 'pull_request'
-        runs-on: ubuntu-latest
-        steps:
-            - name: Get PR metadata
-              id: pr-metadata
-              run: |
-                  echo "Collecting PR metadata..."
-                  echo "--------------------------------------------------------------------------------"
-                  echo "Event name: ${{ github.event_name }}"
-                  echo "Event action: ${{ github.event.action }}"
-                  echo "Actor: ${{ github.actor }} ${{ github.actor == 'github-actions' }}"
-                  echo "PR number: ${{ github.event.pull_request.number }}"
-                  echo "PR title: ${{ github.event.pull_request.title }} ${{ contains(github.event.pull_request.title, 'Changeset version bump') }}"
-                  echo "Head ref: ${{ github.event.pull_request.head.ref }}"
-                  echo "Head SHA: ${{ github.event.pull_request.head.sha }}"
-                  echo "Base ref: ${{ github.event.pull_request.base.ref }}"
-                  echo "Base SHA: ${{ github.event.pull_request.base.sha }}"
-
-    # Job 1: Create version bump PR when changesets are merged to main
-    changeset-pr-version-bump:
-        if: >
-            ( github.event_name == 'pull_request' &&
-            github.event.pull_request.merged == true &&
-            github.event.pull_request.base.ref == 'main' &&
-            github.actor != 'github-actions' ) ||
-            github.event_name == 'workflow_dispatch'
-        runs-on: ubuntu-latest
-        permissions:
-            contents: write
-            pull-requests: write
-        steps:
-            - name: Git Checkout
-              uses: actions/checkout@v4
-              with:
-                  fetch-depth: 0
-                  ref: ${{ env.GIT_REF }}
-
-            - name: Setup Node.js
-              uses: actions/setup-node@v4
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
-                  cache: "npm"
-
-            - name: Install Dependencies
-              run: npm run install:all
-
-            # Check if there are any new changesets to process
-            - name: Check for changesets
-              id: check-changesets
-              run: |
-                  NEW_CHANGESETS=$(find .changeset -name "*.md" ! -name "README.md" | wc -l | tr -d ' ')
-                  echo "Changesets diff with previous version: $NEW_CHANGESETS"
-                  echo "new_changesets=$NEW_CHANGESETS" >> $GITHUB_OUTPUT
-
-            # Create version bump PR using changesets/action if there are new changesets
-            - name: Changeset Pull Request
-              if: steps.check-changesets.outputs.new_changesets != '0'
-              id: changesets
-              uses: changesets/action@v1
-              with:
-                  commit: "changeset version bump"
-                  title: "Changeset version bump"
-                  version: npm run version-packages # This performs the changeset version bump
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    # Job 2: Process version bump PR created by github-actions
+    # Job to process the version bump PR created by github-actions
     changeset-pr-edit-approve:
         name: Auto approve and merge Bump version PRs
         runs-on: ubuntu-latest
         permissions:
             contents: write
             pull-requests: write
+        # IMPORTANT: Only run for PRs opened/labeled by github-actions with the specific title
+        # Only run for PRs opened/labeled by github-actions with the specific title
         if: >
-            github.event_name == 'pull_request' &&
             github.event.pull_request.base.ref == 'main' &&
             github.actor == 'github-actions' &&
             contains(github.event.pull_request.title, 'Changeset version bump')
         steps:
+            # Determine checkout ref based on event (opened vs labeled)
             - name: Determine checkout ref
               id: checkout-ref
               run: |
                   echo "Event action: ${{ github.event.action }}"
-                  echo "Actor: ${{ github.actor }}"
+                  echo "Actor: ${{ github.actor }}" # Should be github-actions if 'if' condition passed
                   echo "Head ref: ${{ github.head_ref }}"
                   echo "PR SHA: ${{ github.event.pull_request.head.sha }}"
 
-                  if [[ "${{ github.event.action }}" == "opened" && "${{ github.actor }}" == "github-actions" ]]; then
-                    echo "Using branch ref: ${{ github.head_ref }}"  
+                  # When the PR is first 'opened' by github-actions, checkout the branch
+                  # When it's 'labeled' later, checkout the specific commit SHA
+                  if [[ "${{ github.event.action }}" == "opened" ]]; then
+                    echo "Using branch ref: ${{ github.head_ref }}"
                     echo "git_ref=${{ github.head_ref }}" >> $GITHUB_OUTPUT
                   else
+                    # For labeled events or others, use the specific commit SHA
                     echo "Using SHA ref: ${{ github.event.pull_request.head.sha }}"
                     echo "git_ref=${{ github.event.pull_request.head.sha }}" >> $GITHUB_OUTPUT
                   fi
@@ -112,7 +46,7 @@ jobs:
             - name: Checkout Repo
               uses: actions/checkout@v4
               with:
-                  token: ${{ secrets.GITHUB_TOKEN }}
+                  token: ${{ secrets.GITHUB_TOKEN }} # Use GITHUB_TOKEN for checkout
                   fetch-depth: 0
                   ref: ${{ steps.checkout-ref.outputs.git_ref }}
 
@@ -127,7 +61,7 @@ jobs:
                   echo "version=$VERSION"
                   echo "prev_version=$PREV_VERSION"
 
-            # Update CHANGELOG.md with proper format
+            # Update CHANGELOG.md with proper format (only if not already done)
             - name: Update Changelog Format
               if: ${{ !contains(github.event.pull_request.labels.*.name, 'changelog-ready') }}
               env:
@@ -164,12 +98,13 @@ jobs:
                         labels: ['changelog-ready']
                       });
 
-            # Auto-approve PR only after it has been labeled
+            # Auto-approve PR only after it has been labeled 'changelog-ready'
+            # This step will run again if the 'labeled' event triggers the workflow
             - name: Auto approve PR
               if: contains(github.event.pull_request.labels.*.name, 'changelog-ready')
               uses: hmarr/auto-approve-action@v4
               with:
-                  review-message: "I'm approving since it's a bump version PR"
+                  review-message: "Auto-approved: Changeset version bump PR with formatted changelog."
 
             # Auto-merge PR
             - name: Automerge on PR

@@ -1,0 +1,62 @@
+name: Changeset - Create Version Bump PR
+run-name: Changeset - Create Version Bump PR
+
+on:
+    pull_request:
+        types: [closed] # Trigger when any PR is closed
+    workflow_dispatch: # Allow manual triggering
+
+env:
+    NODE_VERSION: 20.18.1
+
+jobs:
+    # Job to create version bump PR when changesets are merged to main
+    changeset-pr-version-bump:
+        # Only run if a PR was MERGED into main AND the actor wasn't github-actions (to avoid loops)
+        # Or if manually dispatched
+        if: >
+            ( github.event_name == 'pull_request' &&
+              github.event.pull_request.merged == true &&
+              github.event.pull_request.base.ref == 'main' &&
+              github.actor != 'github-actions' ) ||
+            github.event_name == 'workflow_dispatch'
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            pull-requests: write
+        steps:
+            - name: Git Checkout (main)
+              uses: actions/checkout@v4
+              with:
+                  ref: "main"
+                  fetch-depth: 0
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: "npm"
+
+            - name: Install Dependencies
+              run: npm run install:all # Assuming this installs dependencies for changeset CLI
+
+            # Check if there are any new changesets to process
+            - name: Check for changesets
+              id: check-changesets
+              run: |
+                  NEW_CHANGESETS=$(find .changeset -name "*.md" ! -name "README.md" | wc -l | tr -d ' ')
+                  echo "Changesets diff with previous version: $NEW_CHANGESETS"
+                  echo "new_changesets=$NEW_CHANGESETS" >> $GITHUB_OUTPUT
+
+            # Create version bump PR using changesets/action if there are new changesets
+            - name: Create Changeset Pull Request
+              if: steps.check-changesets.outputs.new_changesets != '0'
+              id: changesets
+              uses: changesets/action@v1
+              with:
+                  commit: "changeset version bump" # Using 'chore' prefix is common
+                  title: "Changeset version bump"
+                  version: npm run version-packages # This performs the changeset version bump
+              env:
+                  # GITHUB_TOKEN is sufficient here as it just needs to create the PR
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
