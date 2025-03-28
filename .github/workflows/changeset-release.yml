@@ -14,7 +14,7 @@ env:
 jobs:
     # Job 0: Collect metadata from PR
     changeset-pr-metadata:
-        if: github.event_name == 'pull_request' && github.event.action == 'opened'
+        if: github.event_name == 'pull_request'
         runs-on: ubuntu-latest
         steps:
             - name: Get PR metadata
