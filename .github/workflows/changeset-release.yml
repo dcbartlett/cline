@@ -4,7 +4,7 @@ run-name: Changeset Release ${{ github.actor != 'github-actions' && '- Create PR
 on:
     workflow_dispatch:
     pull_request:
-        types: [closed, opened]
+        types: [opened, closed]
 
 env:
     REPO_PATH: ${{ github.repository }}
@@ -24,9 +24,9 @@ jobs:
                   echo "--------------------------------------------------------------------------------"
                   echo "Event name: ${{ github.event_name }}"
                   echo "Event action: ${{ github.event.action }}"
-                  echo "Actor: ${{ github.actor }}"
+                  echo "Actor: ${{ github.actor }} ${{ github.actor == 'github-actions' }}"
                   echo "PR number: ${{ github.event.pull_request.number }}"
-                  echo "PR title: ${{ github.event.pull_request.title }}"
+                  echo "PR title: ${{ github.event.pull_request.title }} ${{ contains(github.event.pull_request.title, 'Changeset version bump') }}"
                   echo "Head ref: ${{ github.event.pull_request.head.ref }}"
                   echo "Head SHA: ${{ github.event.pull_request.head.sha }}"
                   echo "Base ref: ${{ github.event.pull_request.base.ref }}"
