@@ -1,5 +1,24 @@
 # Changelog
 
+## 3.9.0
+
+### Minor Changes
+
+-   dff2d59: improving search and replace edit failure behaviors
+-   aec21bb: added telemetry to track replace_in_file tool failures
+-   9653830: feat(extension): add access to history, mcp, and new task buttons in popout view
+-   130922f: Support connecting to SSE servers
+-   bf25d5b: Add Bedrock prompt caching support (optional).
+
+    This feature protected under checkbox because it is not yet rolled out to everyone, and if you will try to send cache headers, and its not enabled for you, you will get error.
+
+### Patch Changes
+
+-   1efd84a: Move the MCP Restart and Delete buttons and add an auto-approve all toggle
+-   841f3da: updated gemini-2.0-pro-exp-02-05 to gemini-2.5-pro-exp-03-25 for Vertex AI
+-   e5e57f3: Test Patch
+-   9747f0a: Test
+
 ## [3.8.4]
 
 -   Add Sambanova Deepseek-V3-0324
