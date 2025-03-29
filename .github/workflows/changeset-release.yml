@@ -90,4 +90,5 @@ jobs:
                   echo "--------------------------------------------------------------------------------"
                   echo "Pushing to remote..."
                   echo "--------------------------------------------------------------------------------"
-                  git push
+                  CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+                  git push origin $CURRENT_BRANCH
