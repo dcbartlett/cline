@@ -290,7 +290,8 @@
 		"prepare": "husky",
 		"changeset": "changeset",
 		"version-packages": "changeset version",
-		"ignore": "echo 'Nothing to ignore'"
+		"ignore": "echo 'Nothing to ignore'",
+		"ignore2": "echo 'Nothing to ignore 2'"
 	},
 	"devDependencies": {
 		"@changesets/cli": "^2.27.12",
