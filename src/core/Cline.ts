@@ -64,7 +64,6 @@ import { ClineHandler } from "../api/providers/cline"
 import { ClineProvider } from "./webview/ClineProvider"
 import { DEFAULT_LANGUAGE_SETTINGS, getLanguageKey, LanguageDisplay, LanguageKey } from "../shared/Languages"
 import { telemetryService } from "../services/telemetry/TelemetryService"
-import { ConversationTelemetryService, TelemetryChatMessage } from "../services/telemetry/ConversationTelemetryService"
 import pTimeout from "p-timeout"
 import { GlobalFileNames } from "../global-constants"
 import {
@@ -1354,25 +1353,6 @@ export class Cline {
 				preferredLanguageInstructions,
 			)
 		}
-
-		// Capture system prompt for telemetry,
-		// ONLY if user is opted in, in advanced settings
-		if (this.providerRef.deref()?.conversationTelemetryService.isOptedInToConversationTelemetry()) {
-			const systemMessage: TelemetryChatMessage = {
-				role: "system",
-				content: systemPrompt,
-				ts: Date.now(), // we dont uniquely identify system messages, so we use the timestamp as the id
-			}
-
-			// no need for timeout here, as there's no timestamp to compare to
-			this.providerRef.deref()?.conversationTelemetryService.captureMessage(this.taskId, systemMessage, {
-				apiProvider: this.apiProvider,
-				model: this.api.getModel().id,
-				tokensIn: 0,
-				tokensOut: 0,
-			})
-		}
-
 		const contextManagementMetadata = this.contextManager.getNewContextMessagesAndMetadata(
 			this.apiConversationHistory,
 			this.clineMessages,
@@ -1768,13 +1748,25 @@ export class Cline {
 									)
 								} catch (error) {
 									await this.say("diff_error", relPath)
+
+									// Extract error type from error message if possible, or use a generic type
+									const errorType =
+										error instanceof Error && error.message.includes("does not match anything")
+											? "search_not_found"
+											: "other_diff_error"
+
+									// Add telemetry for diff edit failure
+									telemetryService.captureDiffEditFailure(this.taskId, errorType)
+
 									pushToolResult(
 										formatResponse.toolError(
 											`${(error as Error)?.message}\n\n` +
 												`This is likely because the SEARCH block content doesn't match exactly with what's in the file, or if you used multiple SEARCH/REPLACE blocks they may not have been in the order they appear in the file.\n\n` +
 												`The file was reverted to its original state:\n\n` +
 												`<file_content path="${relPath.toPosix()}">\n${this.diffViewProvider.originalContent}\n</file_content>\n\n` +
-												`Try again with fewer/more precise SEARCH blocks.\n(If you run into this error two times in a row, you may use the write_to_file tool as a fallback.)`,
+												`First, make sure you call the read_file tool and re-read the file again in case any changes were made, to get its latest state. Then, make a proper, TARGETED search and replace edit using the write_to_file tool.` +
+												`You may want to try fewer/more precise SEARCH blocks.\n(If you run into this error three times in a row, you may use the write_to_file tool as a fallback. ` +
+												`Keep in mind, the write_to_file fallback is far from ideal, as this means you'll be re-writing the entire contents of the file just to make a few edits, which takes time and money. So let's bias towards using replace_in_file as effectively as possible)`,
 										),
 									)
 									await this.diffViewProvider.revertChanges()
@@ -3190,39 +3182,6 @@ export class Cline {
 
 		telemetryService.captureConversationTurnEvent(this.taskId, this.apiProvider, this.api.getModel().id, "user")
 
-		// Capture message data for telemetry,
-		// ONLY if user is opted in, in advanced settings
-		if (this.providerRef.deref()?.conversationTelemetryService.isOptedInToConversationTelemetry()) {
-			// Get the last message from apiConversationHistory
-			const lastMessage = this.apiConversationHistory[this.apiConversationHistory.length - 1]
-
-			// Get the corresponding timestamp from clineMessages
-			// The last message in clineMessages should be the one we just added
-
-			const lastClineMessage = this.clineMessages[this.clineMessages.length - 1]
-			const ts = lastClineMessage.ts
-
-			// Send individual message to telemetry
-			this.providerRef.deref()?.conversationTelemetryService.captureMessage(
-				this.taskId,
-				// Add the timestamp to the message object for telemetry
-				{
-					...lastMessage,
-					ts,
-				},
-				{
-					apiProvider: this.apiProvider,
-					model: this.api.getModel().id,
-					tokensIn: 0,
-					tokensOut: 0,
-				},
-			)
-
-			// Send entire conversation history to cleanup endpoint
-			// This ensures deleted messages are properly handled in telemetry
-			this.providerRef.deref()?.conversationTelemetryService.cleanupTask(this.taskId, this.clineMessages)
-		}
-
 		// since we sent off a placeholder api_req_started message to update the webview while waiting to actually start the API request (to load potential details for example), we need to update the text of that message
 		const lastApiReqIndex = findLastIndex(this.clineMessages, (m) => m.say === "api_req_started")
 		this.clineMessages[lastApiReqIndex].text = JSON.stringify({
@@ -3299,36 +3258,6 @@ export class Cline {
 				await this.saveClineMessages()
 
 				telemetryService.captureConversationTurnEvent(this.taskId, this.apiProvider, this.api.getModel().id, "assistant")
-
-				// Capture message data for telemetry after assistant response
-				// ONLY if user is opted in, in advanced settings
-				if (this.providerRef.deref()?.conversationTelemetryService.isOptedInToConversationTelemetry()) {
-					// Get the last message from apiConversationHistory
-					const lastMessage = this.apiConversationHistory[this.apiConversationHistory.length - 1]
-
-					// Find the corresponding timestamp from clineMessages
-					// For assistant messages, we need to find the most recent "text" message
-					const lastTextMessage = findLast(this.clineMessages, (m) => m.say === "text")
-
-					// Add the timestamp to the message object for telemetry
-					if (!lastTextMessage) {
-						console.error("No text message found in clineMessages")
-					} else {
-						this.providerRef.deref()?.conversationTelemetryService.captureMessage(
-							this.taskId,
-							{
-								...lastMessage,
-								ts: lastTextMessage.ts,
-							},
-							{
-								apiProvider: this.apiProvider,
-								model: this.api.getModel().id,
-								tokensIn: inputTokens,
-								tokensOut: outputTokens,
-							},
-						)
-					}
-				}
 
 				// signals to provider that it can retrieve the saved messages from disk, as abortTask can not be awaited on in nature
 				this.didFinishAbortingStream = true
@@ -3478,32 +3407,6 @@ export class Cline {
 					role: "assistant",
 					content: [{ type: "text", text: assistantMessage }],
 				})
-
-				// Capture message data for telemetry after assistant response,
-				// ONLY if user is opted in, in advanced settings
-				if (this.providerRef.deref()?.conversationTelemetryService.isOptedInToConversationTelemetry()) {
-					// Get the last message from apiConversationHistory
-					const lastMessage = this.apiConversationHistory[this.apiConversationHistory.length - 1]
-
-					// Find the corresponding timestamp from clineMessages
-					const lastClineMessage = this.clineMessages[this.clineMessages.length - 1]
-
-					if (lastClineMessage) {
-						this.providerRef.deref()?.conversationTelemetryService.captureMessage(
-							this.taskId,
-							{
-								...lastMessage,
-								ts: lastClineMessage.ts,
-							},
-							{
-								apiProvider: this.apiProvider,
-								model: this.api.getModel().id,
-								tokensIn: inputTokens,
-								tokensOut: outputTokens,
-							},
-						)
-					}
-				}
 
 				// NOTE: this comment is here for future reference - this was a workaround for userMessageContent not getting set to true. It was due to it not recursively calling for partial blocks when didRejectTool, so it would get stuck waiting for a partial block to complete before it could continue.
 				// in case the content blocks finished
