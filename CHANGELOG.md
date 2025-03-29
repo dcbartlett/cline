@@ -2,16 +2,11 @@
 
 ## 3.9.0
 
-### Minor Changes
-
 -   bf25d5b: Add Bedrock prompt caching support (optional).
 
-    This feature protected under checkbox because it is not yet rolled out to everyone, and if you will try to send cache headers, and its not enabled for you, you will get error.
+This feature protected under checkbox because it is not yet rolled out to everyone, and if you will try to send cache headers, and its not enabled for you, you will get error.
 
 -   e9b6659: Add cost calculation support for LiteLLM provider
-
-### Patch Changes
-
 -   c6c49ec: Fix bug where Cline would use plan_mode_response bug without response parameter
 -   8c4b642: Refactor types and functions in McpHub
 -   0204396: Added sambanova Deepseek-V3-0324
