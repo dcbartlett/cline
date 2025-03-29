@@ -1,8 +1,6 @@
 # Changelog
 
-## 3.9.0
-
-### Minor Changes
+## [3.9.0]
 
 -   dff2d59: improving search and replace edit failure behaviors
 -   aec21bb: added telemetry to track replace_in_file tool failures
