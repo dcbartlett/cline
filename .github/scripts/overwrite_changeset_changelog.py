@@ -27,34 +27,55 @@ CHANGELOG_PATH = os.environ.get("CHANGELOG_PATH", "CHANGELOG.md")
 VERSION = os.environ['VERSION']
 PREV_VERSION = os.environ.get("PREV_VERSION", "")
 NEW_CONTENT = os.environ.get("NEW_CONTENT", "")
+RELEASE = os.environ.get("RELEASE", "false").lower() == "true"
 
 def overwrite_changelog_section(changelog_text: str, new_content: str):
     # Find the section for the specified version
     version_pattern = f"## {VERSION}\n"
+    unformmatted_prev_version_pattern = f"## {PREV_VERSION}\n"
     prev_version_pattern = f"## [{PREV_VERSION}]\n"
     print(f"latest version: {VERSION}")
     print(f"prev_version: {PREV_VERSION}")
 
     notes_start_index = changelog_text.find(version_pattern) + len(version_pattern)
-    notes_end_index = changelog_text.find(prev_version_pattern, notes_start_index) if PREV_VERSION and prev_version_pattern in changelog_text else len(changelog_text)
+    notes_end_index = changelog_text.find(prev_version_pattern, notes_start_index) if PREV_VERSION and (prev_version_pattern in changelog_text or unformmatted_prev_version_pattern in changelog_text) else len(changelog_text)
 
     if new_content:
         return changelog_text[:notes_start_index] + f"{new_content}\n" + changelog_text[notes_end_index:]
     else:
         changeset_lines = changelog_text[notes_start_index:notes_end_index].split("\n")
-        # Remove the first two lines from the regular changeset format, ex: \n### Patch Changes
-        parsed_lines = "\n".join(changeset_lines[2:]) 
+        filtered_lines = []
+        for line in changeset_lines:
+            # If the previous line is a changeset format
+            if filtered_lines and filtered_lines[-1].startswith("### "):
+                # Remove the last two lines from the filted_lines
+                filtered_lines.pop()
+                filtered_lines.pop()
+            else:
+                filtered_lines.append(line.strip())
+
+        # Prepend a new line to the first line of filtered_lines
+        if filtered_lines:
+            filtered_lines[0] = "\n" + filtered_lines[0]
+
+        # Print filted_lines wiht a "\n" at the end of each line
+        for line in filtered_lines:
+            print(line.strip())
+
+        parsed_lines = "\n".join(line for line in filtered_lines)
         updated_changelog = changelog_text[:notes_start_index] + parsed_lines + changelog_text[notes_end_index:]
-        updated_changelog = updated_changelog.replace(f"## {VERSION}", f"## [{VERSION}]")
+        if RELEASE:
+            # Ensure version numbers are wrapped in square brackets
+            updated_changelog = "\n".join(updated_changelog.split("\n")[2:])
         return updated_changelog
 
 with open(CHANGELOG_PATH, 'r') as f:
     changelog_content = f.read()
 
 new_changelog = overwrite_changelog_section(changelog_content, NEW_CONTENT)
-print("----------------------------------------------------------------------------------")
-print(new_changelog)
-print("----------------------------------------------------------------------------------")
+# print("----------------------------------------------------------------------------------")
+# print(new_changelog)
+# print("----------------------------------------------------------------------------------")
 # Write back to CHANGELOG.md
 with open(CHANGELOG_PATH, 'w') as f:
     f.write(new_changelog)
