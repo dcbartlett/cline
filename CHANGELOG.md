@@ -1,5 +1,19 @@
 # Changelog
 
+## 3.9.0
+
+### Minor Changes
+
+-   dff2d59: improving search and replace edit failure behaviors
+-   aec21bb: added telemetry to track replace_in_file tool failures
+-   9653830: feat(extension): add access to history, mcp, and new task buttons in popout view
+-   130922f: Support connecting to SSE servers
+
+### Patch Changes
+
+-   1efd84a: Move the MCP Restart and Delete buttons and add an auto-approve all toggle
+-   841f3da: updated gemini-2.0-pro-exp-02-05 to gemini-2.5-pro-exp-03-25 for Vertex AI
+
 ## [3.8.4]
 
 -   Add Sambanova Deepseek-V3-0324
